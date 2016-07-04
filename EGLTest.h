@@ -37,8 +37,10 @@ public:
 	int chooseConfigByEGL();
 	int selectEGLConfig(EGLint rederableType);
 private:
-	sp<SurfaceComposerClient> mSession;
 
+	void queryActiveUniforms();
+
+	sp<SurfaceComposerClient> mSession;
 	static const EGLint attrsPrefer[MAX_PREFER_ATTR]; 
 	int mWidth;
 	int mHeight;
