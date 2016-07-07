@@ -19,10 +19,11 @@ const char FRAGMENT_SHADER[] =
 const char VERTEX_SHADER1[] =
 	"attribute vec4 a_position;				\n"
 	"attribute vec4 a_color;				\n"
+	"uniform vec4 v_color_u;				\n"
 	"varying mediump vec4 v_color;					\n"
 	"void main()							\n"
 	"{										\n"
-	"		v_color = a_color;				\n"
+	"		v_color = v_color_u;			\n"
 	"		gl_Position = a_position;		\n"
 	"}";
 

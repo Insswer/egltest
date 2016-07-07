@@ -371,15 +371,19 @@ int EGLTest::init() {
 	//bind vPosition to attribute 0
 	//glBindAttribLocation(programObject, 0, "vPosition");
 	glBindAttribLocation(programObject, 0, "a_position");
-	glBindAttribLocation(programObject, 1, "a_color");
+	//glBindAttribLocation(programObject, 1, "a_color");
 	//glBindAttribLocation(mProgramObject, 0, "a_position");
+
+	
 
 	//link the program
 	glLinkProgram(programObject);
 
+	/*
 	printf ("check bind with a_color@%d, a_position@%d\n",
 		glGetAttribLocation(programObject, "a_color"), 
 		glGetAttribLocation(programObject, "a_position"));
+	*/
 
 	//check the link status
 	glGetProgramiv(programObject, GL_LINK_STATUS, &linked);
@@ -528,14 +532,33 @@ void EGLTest::draw() {
 	//glVertexPointer(3, GL_FLOAT, 0, vVertices);
 
 	//use constant vertex attribute
-	GLfloat color[4] = {0.0f, 1.0f, 0.0f, 1.0f};
+	GLfloat color[] = {0.0f, 1.0f, 0.0f, 1.0f};
+	GLuint vboIds[2];
+	GLuint indices[] = {0, 1, 2};
 
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, vVertices);
+	glGenBuffers(2, vboIds);
+	
+	glBindBuffer(GL_ARRAY_BUFFER, vboIds[0]);
+	glBufferData(GL_ARRAY_BUFFER, 9 * sizeof(float), vVertices, GL_STATIC_DRAW);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboIds[1]);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3 * sizeof(GLuint), indices, GL_STATIC_DRAW);
+
+	GLuint vColorU = glGetUniformLocation(mProgramObject, "v_color_u");
+	glUniform4fv(vColorU, 1, color);
+
+	//use gpu buffer
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glEnableVertexAttribArray(0);
-	glVertexAttrib4fv(1, color);
+	//glVertexAttrib4fv(1, color);
+	//glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, color);
+	//glEnableVertexAttribArray(1);
 
 	//array buffer will copy to gpu
-	glDrawArrays(GL_TRIANGLES, 0, 3);
+	//glDrawArrays(GL_TRIANGLES, 0, 3);
+	glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, 0);
+	glDeleteBuffers(2, vboIds);
+
 	eglSwapBuffers(mDisplay, mSurface);
 }
 

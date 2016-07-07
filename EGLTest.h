@@ -20,6 +20,13 @@ using namespace android;
 //HAL_PIXEL_FORMAT_RGBA_8888 
 #define HARDWARE_NATIVE_VISUAL_ID 1
 
+#define VERTEX_POS_SIZE			3
+#define VERTEX_NORMAL_SIZE		3
+#define VERTEX_TEXCOORD0_SIZE	2
+
+#define VERTEX_POS_INDX			0
+#define VERTEX_NORMAL_INDX		1
+#define VERTEX_TEXCOORD0_INDX	2	
 
 class EGLTest {
 public:
@@ -37,7 +44,6 @@ public:
 	int chooseConfigByEGL();
 	int selectEGLConfig(EGLint rederableType);
 private:
-
 	void queryActiveUniforms();
 
 	sp<SurfaceComposerClient> mSession;
