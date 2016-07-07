@@ -1,5 +1,7 @@
 #define LOG_TAG "EGL_TEST"
 
+#include <math.h>
+
 #include <cutils/memory.h>
 #include <utils/Log.h>
 #include <utils/String8.h>
@@ -39,6 +41,8 @@ const EGLint EGLTest::attrsPrefer[MAX_PREFER_ATTR] = {
 		EGL_RED_SIZE,		8,
 		EGL_GREEN_SIZE,		8,
 		EGL_BLUE_SIZE,		8,
+		EGL_DEPTH_SIZE,		8,
+		EGL_STENCIL_SIZE,	8,
 		EGL_ALPHA_SIZE,		8,
 		EGL_NONE
 };
@@ -347,7 +351,7 @@ int EGLTest::init() {
 	GLint linked;
 
 	//load vertex/fragment shaders
-	if ((vertexShader = esLoadShader(GL_VERTEX_SHADER, VERTEX_SHADER1)) < 0) {
+	if ((vertexShader = esLoadShader(GL_VERTEX_SHADER, VERTEX_SHADER2)) < 0) {
 		printf ("load vertex shader failed\n");
 		return -1;
 	}
@@ -371,7 +375,7 @@ int EGLTest::init() {
 	//bind vPosition to attribute 0
 	//glBindAttribLocation(programObject, 0, "vPosition");
 	glBindAttribLocation(programObject, 0, "a_position");
-	//glBindAttribLocation(programObject, 1, "a_color");
+	glBindAttribLocation(programObject, 1, "a_color");
 	//glBindAttribLocation(mProgramObject, 0, "a_position");
 
 	
@@ -505,15 +509,29 @@ void EGLTest::draw() {
 	}
 
 	GLfloat vVertices[] = {
-		0.0f, 0.5f, 0.0f,
-	   -0.5f, -0.5f, 0.0f,
-		0.5f, -0.5f, 0.0f
+		-0.5f, -0.75f, 0.0f,
+		0.5f, -0.75f, 0.0f,
+		0.5f, 0.25f, 0.0f,
+		-0.5f, 0.25f, 0.0f,
+	
+		//0.75f, 0.25f, 0.0f,
+		//1.75f, 0.25f, 0.0f,
+		//1.75f, 1.25f, 0.0f,
+		//0.75f, 1.25f, 0.0f,
 	};
 
+	GLfloat vVertices2[] = {
+		-0.25f, -0.55f, 0.0f,
+		0.25f, -0.55f, 0.0f,
+		0.25f, -0.05f, 0.0f,
+		-0.25f, -0.05f, 0.0f,
+	};
+
+
 	//set the viewport
-	glViewport(0, 0, mWidth, mHeight);
+	glViewport(0, 0, 640, 640);
 	//clear the color buffer
-	glClear (GL_COLOR_BUFFER_BIT);
+	glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	//use program object
 	glUseProgram(mProgramObject);
@@ -533,31 +551,41 @@ void EGLTest::draw() {
 
 	//use constant vertex attribute
 	GLfloat color[] = {0.0f, 1.0f, 0.0f, 1.0f};
+	GLfloat color2[] = {1.0f, 0.0f, 0.0f, 1.0f};
 	GLuint vboIds[2];
-	GLuint indices[] = {0, 1, 2};
+	GLuint indices[] = {0, 1, 2, 0, 2, 3};
+	GLuint indices2[] = {0, 1, 2, 0, 2, 3};
 
+	/*
 	glGenBuffers(2, vboIds);
 	
 	glBindBuffer(GL_ARRAY_BUFFER, vboIds[0]);
-	glBufferData(GL_ARRAY_BUFFER, 9 * sizeof(float), vVertices, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, 12 * sizeof(float), vVertices, GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboIds[1]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3 * sizeof(GLuint), indices, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(GLuint), indices, GL_STATIC_DRAW);
+	*/
 
-	GLuint vColorU = glGetUniformLocation(mProgramObject, "v_color_u");
-	glUniform4fv(vColorU, 1, color);
+	//GLuint vColorU = glGetUniformLocation(mProgramObject, "v_color_u");
+	//glUniform4fv(vColorU, 1, color);
 
 	//use gpu buffer
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, vVertices);
 	glEnableVertexAttribArray(0);
-	//glVertexAttrib4fv(1, color);
+	glVertexAttrib4fv(1, color);
 	//glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, color);
 	//glEnableVertexAttribArray(1);
 
 	//array buffer will copy to gpu
-	//glDrawArrays(GL_TRIANGLES, 0, 3);
-	glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, 0);
-	glDeleteBuffers(2, vboIds);
+	//glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glDrawElements(GL_TRIANGLE_STRIP, 6, GL_UNSIGNED_INT, indices);
+
+	glDepthFunc(GL_LEQUAL);
+	//glDeleteBuffers(2, vboIds);
+	glEnableVertexAttribArray(0);
+	glVertexAttrib4fv(1, color2);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, vVertices2);
+	glDrawElements(GL_TRIANGLE_STRIP, 6, GL_UNSIGNED_INT, indices2);
 
 	eglSwapBuffers(mDisplay, mSurface);
 }

@@ -57,14 +57,20 @@ private:
 	EGLContext mContext;
 	EGLSurface mSurface;
 	EGLConfig mConfig;
-
-
+	
 	DisplayInfo dinfo;
 	sp<SurfaceControl> mFlingerSurfaceControl;
 	sp<Surface> mFlingerSurface;
 
 	GLuint mProgramObject;
+	
+	GLint mvpLoc;
+	GLfloat *vertices;
+	GLuint *indices;
+	int numIndices;
 
+	GLfloat angle;
+	ESMatrix mvpMatrix;
 };
 
 
