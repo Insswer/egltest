@@ -41,6 +41,6 @@ const char VERTEX_SHADER2[] =
 	"void main()						\n"
 	"{									\n"
 	"	v_color = a_color;				\n"
-	"	gl_Position = u_mvpMatrix * a_position;	\n";
-
+	"	gl_Position = u_mvpMatrix * a_position;	\n"
+	"}									\n";
 #endif

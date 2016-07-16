@@ -13,6 +13,8 @@
 #include <EGL/egl.h>
 #include <GLES/gl.h>
 
+#include "EGLUtil.h"
+
 using namespace android;
 
 
@@ -37,7 +39,10 @@ public:
 	sp<SurfaceComposerClient> session() const;
 	
 	void eventLoop();
+	void prepare();
 	void draw();
+	void swap();
+	void update(long frame);
 	int init();
 	int esLoadShader (GLenum type, const char *shaderSrc);
 

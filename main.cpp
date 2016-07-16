@@ -47,7 +47,21 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	eglTest.draw();	
-	eglTest.eventLoop();
+	long frame = 0L;
+	eglTest.prepare();
+	printf ("prepare done\n");	
+	while (1) {
+		//poll event async
+		
+		eglTest.update(frame);
+		eglTest.draw();	
+		//commit
+		eglTest.swap();
+
+		//for 30fps
+		usleep(26000);
+		frame++;
+		//eglTest.eventLoop();
+	}
     return 0;
 }

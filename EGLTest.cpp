@@ -378,8 +378,6 @@ int EGLTest::init() {
 	glBindAttribLocation(programObject, 1, "a_color");
 	//glBindAttribLocation(mProgramObject, 0, "a_position");
 
-	
-
 	//link the program
 	glLinkProgram(programObject);
 
@@ -412,6 +410,7 @@ int EGLTest::init() {
 
 	mProgramObject = programObject;	
 	mInit = true;
+	
 	//glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	return 0;
 }
@@ -501,13 +500,50 @@ void EGLTest::queryActiveUniforms() {
 	delete[] uniformName;
 }
 
-void EGLTest::draw() {
-	ALOGI ("runTest");
-	if (!mInit) {
-		printf ("egl env not ready\n");
-		return;
+void EGLTest::prepare() {
+	//get matrix location
+	mvpLoc = glGetUniformLocation(mProgramObject, "u_mvpMatrix");
+	
+	//generate cube
+	numIndices = esGenCube(1.0, &vertices, NULL, NULL, &indices);
+
+	//init angle
+	angle = 45.0f;
+
+	glUseProgram(mProgramObject);
+}
+
+void EGLTest::update(long frame) {
+	ESMatrix perspective;
+	ESMatrix modelView;
+	float aspect;
+
+	angle += 0.5f;
+	if (angle >= 360.0f) {
+		angle -= 360.0f;
 	}
 
+	aspect = (GLfloat) mWidth / (GLfloat) mHeight;
+	
+	esMatrixLoadIdentity (&perspective);
+	//60 FOV
+	esPerspective(&perspective, 60.0f, aspect, 1.0f, 20.0f);
+	
+	esMatrixLoadIdentity (&modelView);
+
+	esTranslate(&modelView, 0.0, 0.0, -2.0);
+	esRotate(&modelView, angle, 1.0, 0.0, 1.0);
+
+	esMatrixMultiply(&mvpMatrix, &modelView, &perspective);
+}
+
+void EGLTest::draw() {
+	//ALOGI ("runTest");
+	//if (!mInit) {
+	//	printf ("egl env not ready\n");
+	//	return;
+	//}
+#if 0
 	GLfloat vVertices[] = {
 		-0.5f, -0.75f, 0.0f,
 		0.5f, -0.75f, 0.0f,
@@ -586,7 +622,22 @@ void EGLTest::draw() {
 	glVertexAttrib4fv(1, color2);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, vVertices2);
 	glDrawElements(GL_TRIANGLE_STRIP, 6, GL_UNSIGNED_INT, indices2);
+#endif
 
+	glViewport (0, 0, mWidth, mWidth);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	
+	//glUseProgram(mProgramObject);
+	glVertexAttribPointer (0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), vertices);
+	glEnableVertexAttribArray(0);
+
+	glVertexAttrib4f(1, 1.0f, 0.0f, 0.0f, 1.0f);
+	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, (GLfloat *)&mvpMatrix.m[0][0]);
+
+	glDrawElements(GL_LINE_LOOP, numIndices, GL_UNSIGNED_INT, indices);
+}
+
+void EGLTest::swap() {
 	eglSwapBuffers(mDisplay, mSurface);
 }
 
