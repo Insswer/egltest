@@ -30,8 +30,21 @@
 
 #include "EGLTest.h"
 #include "EGLShader.h"
+#include "gimage/SOIL.h"
 
 using namespace android;
+
+#ifndef GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 
+#define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83f1
+#endif
+
+#ifndef GL_COMPRESSED_RGBA_S3TC_DXT3_EXT
+#define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83f2
+#endif
+
+#ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
+#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83f3
+#endif
 
 const EGLint EGLTest::attrsPrefer[MAX_PREFER_ATTR] = {
 		EGL_SURFACE_TYPE,	EGL_WINDOW_BIT|EGL_PBUFFER_BIT,
@@ -351,12 +364,12 @@ int EGLTest::init() {
 	GLint linked;
 
 	//load vertex/fragment shaders
-	if ((vertexShader = esLoadShader(GL_VERTEX_SHADER, VERTEX_SHADER2)) < 0) {
+	if ((vertexShader = esLoadShader(GL_VERTEX_SHADER, VERTEX_SHADER3)) < 0) {
 		printf ("load vertex shader failed\n");
 		return -1;
 	}
 	
-	if ((fragmentShader = esLoadShader(GL_FRAGMENT_SHADER, FRAGMENT_SHADER1)) < 0) {
+	if ((fragmentShader = esLoadShader(GL_FRAGMENT_SHADER, FRAGMENT_SHADER3)) < 0) {
 		printf ("load fragment shader failed\n");
 		return -1;	
 	}
@@ -374,8 +387,8 @@ int EGLTest::init() {
 
 	//bind vPosition to attribute 0
 	//glBindAttribLocation(programObject, 0, "vPosition");
-	glBindAttribLocation(programObject, 0, "a_position");
-	glBindAttribLocation(programObject, 1, "a_color");
+	//glBindAttribLocation(programObject, 0, "a_position");
+	//glBindAttribLocation(programObject, 1, "a_color");
 	//glBindAttribLocation(mProgramObject, 0, "a_position");
 
 	//link the program
@@ -410,7 +423,24 @@ int EGLTest::init() {
 
 	mProgramObject = programObject;	
 	mInit = true;
-	
+
+	//load info from shader
+	positionLoc = glGetAttribLocation(mProgramObject, "a_position");
+	texCoordLoc = glGetAttribLocation(mProgramObject, "a_texCoord");
+	samplerLoc = glGetUniformLocation(mProgramObject, "s_texture");
+	offsetLoc = glGetUniformLocation(mProgramObject, "u_offset");
+//	textureId = createMipMappedTexture2D();
+//	textureId = loadDDS("uvtemplate.DDS");
+
+	textureId = SOIL_load_OGL_texture(
+				"uvtemplate.DDS",
+				SOIL_LOAD_AUTO,
+				SOIL_CREATE_NEW_ID,
+				SOIL_FLAG_DDS_LOAD_DIRECT | SOIL_FLAG_MIPMAPS
+			);
+	printf ("textureId = %d\n", textureId);
+	printf ("positionLoc = %d, texCoordLoc = %d\n", positionLoc, texCoordLoc);
+
 	//glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	return 0;
 }
@@ -500,8 +530,256 @@ void EGLTest::queryActiveUniforms() {
 	delete[] uniformName;
 }
 
+GLuint EGLTest::loadDDS(const char * imagepath){
+
+	unsigned char header[124];
+
+	FILE *fp; 
+ 
+	/* try to open the file */ 
+	fp = fopen(imagepath, "rb"); 
+	if (fp == NULL){
+		printf("%s could not be opened. Are you in the right directory ? Don't forget to read the FAQ !\n", imagepath); getchar(); 
+		return 0;
+	}
+   
+	/* verify the type of file */ 
+	char filecode[4]; 
+	fread(filecode, 1, 4, fp); 
+	if (strncmp(filecode, "DDS ", 4) != 0) { 
+		fclose(fp); 
+		return 0; 
+	}
+	
+	/* get the surface desc */ 
+	fread(&header, 124, 1, fp); 
+
+	unsigned int height      = *(unsigned int*)&(header[8 ]);
+	unsigned int width	     = *(unsigned int*)&(header[12]);
+	unsigned int linearSize	 = *(unsigned int*)&(header[16]);
+	unsigned int mipMapCount = *(unsigned int*)&(header[24]);
+	unsigned int fourCC      = *(unsigned int*)&(header[80]);
+
+ 
+	unsigned char * buffer;
+	unsigned int bufsize;
+	/* how big is it going to be including all mipmaps? */ 
+	bufsize = mipMapCount > 1 ? linearSize * 2 : linearSize; 
+	buffer = (unsigned char*)malloc(bufsize * sizeof(unsigned char)); 
+	fread(buffer, 1, bufsize, fp); 
+	/* close the file pointer */ 
+	fclose(fp);
+
+	unsigned int components  = (fourCC == FOURCC_DXT1) ? 3 : 4; 
+	unsigned int format;
+	switch(fourCC) 
+	{ 
+	case FOURCC_DXT1: 
+	    printf ("read DXT1 format\n");	
+		format = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT; 
+		break; 
+	case FOURCC_DXT3: 
+		printf ("read DXT3 format\n");
+		format = GL_COMPRESSED_RGBA_S3TC_DXT3_EXT; 
+		break; 
+	case FOURCC_DXT5: 
+		printf ("read DXT5 format\n");
+		format = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT; 
+		break; 
+	default: 
+		free(buffer); 
+		return 0; 
+	}
+
+	// Create one OpenGL texture
+	GLuint textureID;
+	glGenTextures(1, &textureID);
+
+	// "Bind" the newly created texture : all future texture functions will modify this texture
+	glBindTexture(GL_TEXTURE_2D, textureID);
+	glPixelStorei(GL_UNPACK_ALIGNMENT,1);	
+	
+	unsigned int blockSize = (format == GL_COMPRESSED_RGBA_S3TC_DXT1_EXT) ? 8 : 16; 
+	unsigned int offset = 0;
+
+	/* load the mipmaps */ 
+	for (unsigned int level = 0; level < mipMapCount && (width || height); ++level) 
+	{ 
+		unsigned int size = ((width+3)/4)*((height+3)/4)*blockSize; 
+		glCompressedTexImage2D(GL_TEXTURE_2D, level, format, width, height,  
+			0, size, buffer + offset); 
+	 
+		offset += size; 
+		width  /= 2; 
+		height /= 2; 
+
+		// Deal with Non-Power-Of-Two textures. This code is not included in the webpage to reduce clutter.
+		if(width < 1) width = 1;
+		if(height < 1) height = 1;
+
+	} 
+
+	free(buffer); 
+
+	return textureID;
+}
+
+GLuint EGLTest::createSimpleTexture2D() {
+	GLuint textureId;
+	GLubyte pixels[4 * 4] = {
+		128, 128, 128, 128,
+		128, 128, 128, 128,
+		0, 0, 255, 128,
+		255, 255, 0, 128
+	};	
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+	glGenTextures(1, &textureId);
+	glBindTexture(GL_TEXTURE_2D, textureId);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 2, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+	return textureId;
+}
+
+GLuint EGLTest::createMipMappedTexture2D() {
+	GLuint textureId;
+	int width = 256, height = 256;
+	int level;
+	GLubyte *pixels;
+	GLubyte *prevImage;
+	GLubyte *newImage;
+
+	pixels = genCheckImage(width, height, 8);
+	if (pixels == NULL) {
+		return 0;
+	}
+
+	glGenTextures(1, &textureId);
+	glBindTexture(GL_TEXTURE_2D, textureId);
+
+	//load mipmap 0
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height,
+			0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+	level = 1;
+	prevImage = &pixels[0];
+	while (width > 1 && height > 1) {
+		int newWidth, newHeight;
+
+		genMipMap2D(prevImage, &newImage, width, height,
+				&newWidth, &newHeight);
+
+		glTexImage2D(GL_TEXTURE_2D, level, GL_RGB, newWidth, newHeight,
+				0, GL_RGB, GL_UNSIGNED_BYTE, newImage);
+
+		free(prevImage);
+		prevImage = newImage;
+		level++;
+
+		width = newWidth;
+		height = newHeight;
+
+	}
+	
+	free(newImage);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	return textureId;
+}
+
+// generate an RGB8 checkerboard image
+GLubyte *EGLTest::genCheckImage(int width, int height, int checkSize) {
+	int x, y;
+	GLubyte *pixels = (GLubyte*)malloc(width * height * 3);
+
+	if (pixels == NULL) {
+		return NULL;
+	}
+
+	for (y = 0; y < height; y++) {
+		for (x = 0; x < width; x++) {
+			GLubyte rColor = 0;
+			GLubyte bColor = 0;
+			if ((x / checkSize) % 2 == 0) {
+				rColor = 255 * ((y / checkSize) % 2);
+				bColor = 255 * (1 - ((y / checkSize) % 2));
+			} else {
+				bColor = 255 * ((y / checkSize) % 2);
+				rColor = 255 * (1 - ((y / checkSize) % 2));
+			}
+			
+			pixels[(y * height + x) * 3] = rColor;
+			pixels[(y * height + x) * 3 + 1] = 0;
+			pixels[(y * height + x) * 3 + 2] = bColor;
+		}
+	}
+
+	return pixels;
+}
+
+GLboolean EGLTest::genMipMap2D(GLubyte* src, GLubyte **dst, int srcWidth,
+		int srcHeight, int *dstWidth, int *dstHeight) {
+	int x, y;
+	int texelSize = 3;
+	*dstWidth = srcWidth / 2;
+	if (*dstWidth <= 0) {
+		*dstWidth = 1;
+	}
+
+	*dstHeight = srcHeight / 2;
+	if (*dstHeight <= 0) {
+		*dstHeight = 1;
+	}
+
+	*dst = (GLubyte*)malloc(sizeof(GLubyte) * texelSize * (*dstWidth) * (*dstHeight));
+	if (*dst == NULL) {
+		return GL_FALSE;
+	}
+
+	for (y = 0; y < *dstHeight; y++) {
+		for (x = 0; x < *dstWidth; x++) {
+			int srcIndex[4];
+			float r = 0.0f;
+			float g = 0.0f;
+			float b = 0.0f;
+
+			int sample;
+			srcIndex[0] = 
+				(((y * 2) * srcWidth) + (x * 2)) * texelSize;
+			srcIndex[1] = 
+				(((y * 2) * srcWidth) + (x * 2 + 1)) * texelSize;
+			srcIndex[2] = 
+				((((y * 2) + 1) * srcWidth) + (x * 2)) * texelSize;
+			srcIndex[3] = 
+				((((y * 2) + 1) * srcWidth) + (x * 2 + 1)) * texelSize;
+
+			for (sample = 0; sample < 4; sample++) {
+				r += src[srcIndex[sample]];
+				g += src[srcIndex[sample] + 1];
+				b += src[srcIndex[sample] + 2];
+			}
+
+			r /= 4.0;
+			g /= 4.0;
+			b /= 4.0;
+
+			(*dst)[(y * (*dstWidth) + x) * texelSize] = (GLubyte)(r);
+			(*dst)[(y * (*dstWidth) + x) * texelSize + 1] = (GLubyte)(g);
+			(*dst)[(y * (*dstWidth) + x) * texelSize + 2] = (GLubyte)(b);
+		}
+	}
+
+	return GL_TRUE;
+}
+
 void EGLTest::prepare() {
 	//get matrix location
+#if 0
 	mvpLoc = glGetUniformLocation(mProgramObject, "u_mvpMatrix");
 	
 	//generate cube
@@ -509,11 +787,50 @@ void EGLTest::prepare() {
 
 	//init angle
 	angle = 45.0f;
+#endif
+	static const GLfloat vVertices[]	= {
+		-0.5f, 0.5f, 0.0f, 1.5f,
+		-0.5f, -0.5f, 0.0f, 0.75f,
+		0.5f, -0.5f, 0.0f, 0.75f,
+		0.5f, 0.5f, 0.0f, 1.5f,
+	};
 
+	static const GLfloat guvBuffer[] = {
+		0.0f, 0.0f,
+		0.0f, 1.0f,
+		1.0f, 1.0f,
+		1.0f, 0.0f
+	};
+
+	GLushort indices[] = {0, 1, 2, 0, 2, 3};
+
+	/* setup VBO */
+	GLuint vertexBuffer;
+	glGenBuffers(1, &vertexBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vVertices), vVertices, GL_STATIC_DRAW);
+
+	GLuint uvBuffer;
+	glGenBuffers(1, &uvBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, uvBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(guvBuffer), guvBuffer, GL_STATIC_DRAW);
+
+	GLuint indexBuffer;
+	glGenBuffers(1, &indexBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+	
+	mVertexBuffer = vertexBuffer;
+	mUVBuffer = uvBuffer;
+	mIndexBuffer = indexBuffer;
+
+	glViewport(0, 0, mWidth, mHeight);
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 	glUseProgram(mProgramObject);
 }
 
 void EGLTest::update(long frame) {
+#if 0
 	ESMatrix perspective;
 	ESMatrix modelView;
 	float aspect;
@@ -535,6 +852,7 @@ void EGLTest::update(long frame) {
 	esRotate(&modelView, angle, 1.0, 0.0, 1.0);
 
 	esMatrixMultiply(&mvpMatrix, &modelView, &perspective);
+#endif
 }
 
 void EGLTest::draw() {
@@ -624,17 +942,78 @@ void EGLTest::draw() {
 	glDrawElements(GL_TRIANGLE_STRIP, 6, GL_UNSIGNED_INT, indices2);
 #endif
 
-	glViewport (0, 0, mWidth, mWidth);
+	//draw cube
+#if 0
+	glViewport (0, 0, mWidth, mHeight);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	
 	//glUseProgram(mProgramObject);
 	glVertexAttribPointer (0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), vertices);
 	glEnableVertexAttribArray(0);
 
-	glVertexAttrib4f(1, 1.0f, 0.0f, 0.0f, 1.0f);
+	glVertexAttrib4f(1, 0.0f, 1.0f, 0.0f, 1.0f);
 	glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, (GLfloat *)&mvpMatrix.m[0][0]);
 
 	glDrawElements(GL_LINE_LOOP, numIndices, GL_UNSIGNED_INT, indices);
+#endif
+
+	//sample 2d texture
+#if 0
+	GLfloat vVertices[] = { -0.5f, 0.5f, 0.0f,
+		0.0f, 0.0f,				//texCoord
+		-0.5f, -0.5f, 0.0f,
+		0.0f, 1.0f,
+		0.5f, -0.5f, 0.0f,
+		1.0f, 1.0f,
+		0.5f, 0.5f, 0.0f,
+		1.0f, 0.0f,
+	};
+
+	GLushort indices[] = {0, 1, 2, 0, 2, 3};
+
+	glViewport(0, 0, mWidth, mHeight);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glVertexAttribPointer(positionLoc, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), vVertices);
+	glVertexAttribPointer(texCoordLoc, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), &vVertices[3]);
+
+	glEnableVertexAttribArray(positionLoc);
+	glEnableVertexAttribArray(texCoordLoc);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, textureId);
+
+	glUniform1i(samplerLoc, 0);
+
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
+#endif
+
+	glEnableVertexAttribArray(positionLoc);
+	glBindBuffer(GL_ARRAY_BUFFER, mVertexBuffer);
+	glVertexAttribPointer(positionLoc, 4, GL_FLOAT,
+			GL_FALSE, 0, (void *)0);
+
+
+	glEnableVertexAttribArray(texCoordLoc);
+	glBindBuffer(GL_ARRAY_BUFFER, mUVBuffer);
+	glVertexAttribPointer(texCoordLoc, 2, GL_FLOAT,
+			GL_FALSE, 0, (void *)0);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, textureId);
+	glUniform1i(samplerLoc, 0);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glUniform1f(offsetLoc, -0.7f);
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void *)0);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+	glUniform1f(offsetLoc, 0.7f);
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void *)0);
+
+	glDeleteBuffers(1, &mVertexBuffer);
+	glDeleteBuffers(1, &mUVBuffer);
+	glDeleteBuffers(1, &mIndexBuffer);
 }
 
 void EGLTest::swap() {

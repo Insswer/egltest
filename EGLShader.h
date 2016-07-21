@@ -43,4 +43,25 @@ const char VERTEX_SHADER2[] =
 	"	v_color = a_color;				\n"
 	"	gl_Position = u_mvpMatrix * a_position;	\n"
 	"}									\n";
+
+const char VERTEX_SHADER3[] = 
+	"uniform float u_offset;			\n"
+	"attribute vec4 a_position;			\n"
+	"attribute vec2 a_texCoord;			\n"
+	"varying vec2 v_texCoord;			\n"
+	"void main()						\n"
+	"{									\n"
+	"	gl_Position = vec4(a_position.x + u_offset, a_position.y, a_position.z, a_position.w);		\n"
+	"	v_texCoord = a_texCoord;		\n"
+	"}									\n";
+
+const char FRAGMENT_SHADER3[] = 
+	"precision mediump float;			\n"
+	"uniform sampler2D s_texture;		\n"
+	"varying vec2 v_texCoord;			\n"
+	"void main()						\n"
+	"{									\n"
+	"	gl_FragColor = texture2D(s_texture, v_texCoord);\n"
+	"}									\n";
+
 #endif

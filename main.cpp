@@ -34,14 +34,19 @@
 #include <GLES/glext.h>
 #include <EGL/eglext.h>
 
+#include <glm/glm.hpp>
+
 #include "EGLTest.h"
 
+using namespace glm;
 using namespace android;
 
 int main(int argc, char** argv)
 {
 	EGLTest eglTest(0x80000000);
 	
+	glm::vec3 test(1.0f, 2.0f, 3.0f);
+
 	if (eglTest.init() < 0) {
 		printf ("init egl test failed\n");
 		return -1;

@@ -30,6 +30,12 @@ using namespace android;
 #define VERTEX_NORMAL_INDX		1
 #define VERTEX_TEXCOORD0_INDX	2	
 
+#define FOURCC_DXT1 0x31545844 // Equivalent to "DXT1" in ASCII
+#define FOURCC_DXT3 0x33545844 // Equivalent to "DXT3" in ASCII
+#define FOURCC_DXT5 0x35545844 // Equivalent to "DXT5" in ASCII
+
+
+
 class EGLTest {
 public:
 	EGLTest(int layer);
@@ -50,7 +56,12 @@ public:
 	int selectEGLConfig(EGLint rederableType);
 private:
 	void queryActiveUniforms();
-
+	GLuint createSimpleTexture2D();
+	GLuint createMipMappedTexture2D();
+	GLubyte *genCheckImage(int width, int height, int checkSize);
+	GLboolean genMipMap2D(GLubyte *src, GLubyte **dst, int srcWidth, 
+			int srcHeight, int *dstWidth, int *dstHeight);
+	GLuint loadDDS(const char *imagepath);
 	sp<SurfaceComposerClient> mSession;
 	static const EGLint attrsPrefer[MAX_PREFER_ATTR]; 
 	int mWidth;
@@ -76,6 +87,21 @@ private:
 
 	GLfloat angle;
 	ESMatrix mvpMatrix;
+
+	//for VBO
+	GLuint mVertexBuffer;
+	GLuint mUVBuffer;
+	GLuint mIndexBuffer;
+
+
+	//for texture demo
+	GLuint textureId;
+	GLint positionLoc;
+	GLint texCoordLoc;
+	GLint samplerLoc;
+
+	//for offset mipmap
+	GLuint offsetLoc;
 };
 
 
